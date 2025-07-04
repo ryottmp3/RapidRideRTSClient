@@ -1,12 +1,12 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
-import QtWebEngine 1.15
+import QtWebView
 
 Item {
     id: root
     property string sessionUrl: ""  // filled from loader
 
-    WebEngineView {
+    WebView {
         id: webview
         anchors.fill: parent
         url: root.sessionUrl

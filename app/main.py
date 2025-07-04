@@ -10,16 +10,53 @@ import sys
 import argparse
 import logging
 from network import NetworkManager
-from PySide6.QtWidgets import QApplication, QMainWindow
+from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
 from PySide6.QtPdf import QPdfDocument
 from PySide6.QtPdfWidgets import QPdfView
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtCore import QObject, Slot, QUrl, Signal, Property, QCoreApplication
 from PySide6.QtGui import QDesktopServices, QGuiApplication, QPalette, QColor
-from PySide6.QtQuick import QQuickWindow, QSGRendererInterface
-QQuickWindow.setGraphicsApi(QSGRendererInterface.GraphicsApi.OpenGL)
+from PySide6.QtWebEngineWidgets import QWebEngineView
 from theme_manager import ThemeManager
 from wallet_store import WalletStore
+
+
+class Browser(QWidget):
+    checkoutSuccess = Signal()
+    checkoutFailure = Signal()
+
+    def __init__(self):
+        super(Browser, self).__init__()
+        self.logger = logging.getLogger("rt.client.main")
+        self.setWindowTitle("Stripe Checkout")
+        self.resize(400, 720)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.webV = QWebEngineView(self)
+        layout.addWidget(self.webV)
+        self.webV.urlChanged.connect(self._on_url_changed)
+
+    @Slot(str)
+    def loadUrl(self, url:str):
+        """Loads a URL into WebEngine"""
+        self.webV.load(QUrl(url))
+
+    @Slot(QUrl)
+    def _on_url_changed(self, qurl: QUrl):
+        url = qurl.toString()
+        self.logger.debug(f"Redirect URL: {url}")
+        if "payment-success" in url:
+            # Close the widget
+            self.logger.debug(f"Payment Successful!")
+            self.checkoutSuccess.emit()
+            self.close()
+        elif "8000" not in url:
+            pass
+        else:
+            self.logger.debug(f"Payment Unsuccessful, Someone's Broke!")
+            self.checkoutFailure.emit()
+            self.close()
+            self.logger.debug(f"Browser Widget Closed.")
 
 
 class CLIConfig:
@@ -175,12 +212,17 @@ class Controller(QObject):
         self.loader.setProperty("source", page)
 
 class AppBackend(QObject):
+    checkoutSuccess = Signal()
+    checkoutFailure = Signal()
     """Exposes Python-side functionality like viewing PDFs, ticket management"""
 
-    def __init__(self):
+    def __init__(self, browser: Browser):
         super().__init__()
+        self.browser = browser
         self._windows = []
         self.logger = logging.getLogger("rts.client.main")
+        self.browser.checkoutSuccess.connect(self.checkoutSuccess)
+        self.browser.checkoutFailure.connect(self.checkoutFailure)
 
     @Slot(str)
     def open_pdf_viewer(self, fname):
@@ -192,9 +234,10 @@ class AppBackend(QObject):
         self._windows.append(viewer)
 
     @Slot(str)
-    def purchase_ticket(self, ticket_type):
-        self.logger.debug("purchase_ticket called for %s", ticket_type)
-        # Future: call HTTP API or show purchase QML screen
+    def purchase_ticket(self, session_url: str):
+        self.logger.debug(f"Opening Stripe Checkout: {session_url}")
+        self.browser.loadUrl(session_url)
+        self.browser.show()
 
 
 class QrGenerator(QObject):
@@ -246,6 +289,7 @@ if __name__ == "__main__":
     theme_controller = ThemeController()
     qrgen = QrGenerator()
     wallet_store = WalletStore()
+    browser = Browser()
     theme_controller.applyPalette(theme_controller.currentTheme)
     engine.rootContext().setContextProperty("ThemeController", theme_controller)
     engine.rootContext().setContextProperty("ThemeManager", theme_controller)
@@ -253,6 +297,7 @@ if __name__ == "__main__":
     engine.rootContext().setContextProperty("ThemeList", theme_controller.available_themes)
     engine.rootContext().setContextProperty("QrGen", qrgen)
     engine.rootContext().setContextProperty("WalletStore", wallet_store)
+    engine.rootContext().setContextProperty("Browser", browser)
 
     logger.debug("Loading QML file: main.qml")
     engine.load("main.qml")
@@ -268,7 +313,7 @@ if __name__ == "__main__":
 
     logger.debug("Setting up NetworkManager, Controller, AppBackend")
     network = NetworkManager(os.getenv("API_URL", "http://127.0.0.1:8000"))
-    backend = AppBackend()
+    backend = AppBackend(browser)
     controller = Controller(loader)
     engine.rootContext().setContextProperty("Network", network)
     engine.rootContext().setContextProperty("controller", controller)

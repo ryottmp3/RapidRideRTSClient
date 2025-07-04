@@ -4,7 +4,14 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 
 Item {
+    id: mall
     anchors.fill: parent
+
+    // ===== User Selection ===================================================
+    property string selectedTicketType: ""
+    property string selectedMonth: ""
+    property string selectedYear: ""
+    // ========================================================================
 
     // Background uses Theme
     Rectangle {
@@ -30,12 +37,43 @@ Item {
             Layout.fillWidth: true
             model: [
                 { text: qsTr("Single Use"), value: "single_use" },
-                { text: qsTr("24-Hour Pass"), value: "day_pass" },
+                { text: qsTr("10 Pack"), value: "ten_pack" },
                 { text: qsTr("Monthly Pass"), value: "monthly_pass" }
             ]
             textRole: "text"
+            valueRole: "value"
             onActivated: {
-                description.text = model[index].text + " " + qsTr("selected")
+                index => description.text = model[index].text + " " + qsTr("selected")
+            }
+        }
+
+            // These only show up when Monthly Pass is chosen
+        RowLayout {
+            id: monthYearRow
+            Layout.fillWidth: true
+            spacing: 8
+            visible: ticketTypeCombo.currentValue === "monthly_pass"
+
+            ComboBox {
+                id: monthCombo
+                Layout.preferredWidth: 120
+                currentIndex: -1
+                displayText: currentIndex === -1 ? "Choose Month..." : currentText
+                model: [
+                    qsTr("January"), qsTr("February"), qsTr("March"),
+                    qsTr("April"),   qsTr("May"),      qsTr("June"),
+                    qsTr("July"),    qsTr("August"),   qsTr("September"),
+                    qsTr("October"), qsTr("November"), qsTr("December")
+                ]
+            }
+
+            ComboBox {
+                id: yearCombo
+                Layout.preferredWidth: 100
+                currentIndex: -1
+                displayText: currentIndex === -1 ? "Choose Year..." : currentText
+                model: [2025, 2026, 2027, 2028, 2029, 2030]
+                textRole: ""  // the numbers will show as-is
             }
         }
 
@@ -67,8 +105,19 @@ Item {
                 font.pixelSize: 18
                 font.bold: true
             }
+            
+            // disable if monthly_pass but no month or year chosen
+            enabled: !(ticketTypeCombo.currentValue === "monthly_pass"
+            && (monthCombo.currentIndex < 0 || yearCombo.currentIndex < 0))
+
             onClicked: {
                 busy.visible = true
+                mall.selectedTicketType = ticketTypeCombo.currentValue
+                if (ticketTypeCombo.currentValue === "monthly_pass") {
+                    console.log("Buying pass for", monthCombo.currentText, yearCombo.currentText)
+                    mall.selectedMonth == monthCombo.currentText
+                    mall.selectedYear = yearCombo.currentText
+                }
                 Network.createCheckoutSession(
                     ticketTypeCombo.model[ticketTypeCombo.currentIndex].value,
                     null
@@ -166,11 +215,23 @@ Item {
             busy.visible = false
 
             // Swop in the checkout page
-            controller.loadPage("stripe_checkout.qml")
+            backend.purchase_ticket(sessionUrl)
+        }
+    }
 
-            // Once it's loaded, set its sessionUrl
-            // (Qt.callLater ensures Pageloader.item is non-null)
-                controller.loader.item.sessionUrl = sessionUrl
+    // Listen for Checkout Payment Success
+    Connections {
+        target: backend
+        
+        // Fired when Browser sees "payment-success" in url
+        function onCheckoutSuccess() {
+            Network.generateTicket(mall.selectedTicketType)
+            controller.loadPage("wallet.qml")
+        }
+
+        // Fired when Browser doesn't see "payment-success" in url
+        function onCheckoutFailure() {
+            controller.loadPage("purchasing.qml")
         }
     }
 }

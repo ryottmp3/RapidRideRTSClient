@@ -117,8 +117,6 @@ class WalletStore(QObject):
             return
         ticket = {
             "payload": payload,
-            "type": ticket_type,
-            "purchasedAt": datetime.utcnow().isoformat() + "Z"
         }
         self._tickets.append(ticket)
         self.save()
@@ -148,3 +146,40 @@ class WalletStore(QObject):
         self.logger.debug("getTickets called, returning %d tickets", len(self._tickets))
         return self._tickets
 
+    def serialize_ticket(
+        self,
+        ticket: dict
+    ) -> str:
+        """Canonical JSON format -- sorted keys, no whitespace"""
+        return json.dumps(ticket, separators=(',', ':'), sort_keys=True)
+
+    @Slot(list)
+    def generatePayload(self, data: list) -> list:
+        """Makes payload"""
+        signed_tickets = [
+            {
+                "ticket": {
+                    "ticket_id": d.ticket_id,
+                    "user_id": d.user_id,
+                    "ticket_type": d.ticket_type,
+                    "valid_for": d.valid_for,
+                    "issued_at": d.issued_at,
+                    "issuer": d.issuer,
+                    "status": d.status
+                },
+                "signature": d.signature
+            } for d in data
+        ]
+        keys = [
+            {
+                "ticket": self.serialize(k.ticket),
+                "signature": k.signature
+            } for k in signed_tickets
+        ]
+        payLoad = [
+            base64.b64encode(
+                json.dumps(x).encode()
+            ).decode() for x in keys
+        ]
+        print(f"Pay Loads: {payLoad}")
+        return payLoad

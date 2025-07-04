@@ -193,6 +193,7 @@ class NetworkManager(QObject):
             logger.debug("fetchTickets response status=%d", r.status_code)
             r.raise_for_status()
             tickets = r.json()
+            print(f"Tickets: {tickets}")
             logger.debug("fetchTickets received %d tickets", len(tickets))
             self._ticket_list = tickets
             self.ticketsFetched.emit(self._ticket_list)

@@ -135,6 +135,7 @@ ApplicationWindow {
         }
     }
 
+
     // Central loader to switch between screens
     Loader {
         id: pageLoader
