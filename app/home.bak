@@ -1,58 +1,49 @@
-// home.qml – Modernized UI with gradient background, full-width buttons, and compact drawer
+// home.qml – content‑only page (App shell handles navigation)
+// Themed version using ThemeController context properties
+
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
-import QtQuick.Window 2.15
 
 Rectangle {
-    id: root
-    width: 400
-    height: 720
-    visible: true
-    color: "#121212"
+    anchors.fill: parent
+    color: Theme.background
 
-    // Gradient background
-    gradient: Gradient {
-        GradientStop { position: 0.0; color: "#0f0f0f" }
-        GradientStop { position: 1.0; color: "#1e1e1e" }
-    }
-
-    // Main buttons area
     ColumnLayout {
-        anchors {
-            top: topBar.bottom
-            left: parent.left
-            right: parent.right
-            bottom: parent.bottom
-            margins: 16
-        }
+        anchors.fill: parent
+        anchors.margins: 16
         spacing: 12
 
+        // Big menu buttons using theme
         Repeater {
             model: [
-                { label: "View Routes", page: "routes.qml" },
-                { label: "Purchase Tickets", page: "purchasing.qml" },
-                { label: "Open Wallet", page: "wallet.qml" },
-                { label: "View Alerts", page: "alerts.qml" },
-                { label: "Settings", page: "settings.qml" }
+                { label: "View Routes",       page: "routes.qml"     },
+                { label: "Purchase Tickets",  page: "purchasing.qml" },
+                { label: "Open Wallet",       page: "wallet.qml"     },
+                { label: "View Alerts",       page: "alerts.qml"     },
+                { label: "Settings",          page: "settings.qml"   }
             ]
 
             delegate: Button {
-                text: modelData.label
                 Layout.fillWidth: true
                 height: 60
+                text: modelData.label
                 font.pixelSize: 18
+
                 background: Rectangle {
-                    color: "#292929"
-                    border.color: "#f5721b"
+                    color: Theme.buttonBackground
+                    radius: 8
+                    border.color: Theme.accent
                     border.width: 1
-                    radius: 6
                 }
+
                 contentItem: Text {
                     text: modelData.label
-                    color: "#ffffff"
+                    color: Theme.text
+                    font.pixelSize: 18
                     anchors.centerIn: parent
                 }
+
                 onClicked: controller.loadPage(modelData.page)
             }
         }
