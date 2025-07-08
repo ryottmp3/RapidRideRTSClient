@@ -50,7 +50,7 @@ Rectangle {
                     errorPopup.text = "Both fields are required."
                     errorPopup.open()
                 } else {
-                    Network.login(usernameField.text, passwordField.text, null)
+                    AuthStore.login(usernameField.text, passwordField.text, null)
                 }
             }
         }
@@ -100,7 +100,7 @@ Rectangle {
 
     // Backend Error Listener
     Connections {
-        target: Network
+        target: AuthStore
         function onErrorOccurred(message) {
             errorPopup.text = message
             errorPopup.open()
@@ -109,7 +109,7 @@ Rectangle {
 
     // ** New: handle loginFinished to advance to home.qml **
     Connections {
-        target: Network
+        target: AuthStore
         function onLoginFinished(success, message) {
             if (success) {
                 controller.loadPage("home.qml")

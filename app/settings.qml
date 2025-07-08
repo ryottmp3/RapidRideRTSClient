@@ -61,6 +61,7 @@ Rectangle {
             onClicked: {
                 infoPopup.text = "You have been logged out."
                 infoPopup.open()
+                AuthStore.logout()
                 controller.loadPage("login.qml")
             }
         }

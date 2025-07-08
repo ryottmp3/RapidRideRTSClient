@@ -71,7 +71,7 @@ Rectangle {
                     errorPopup.text = "Username and password are required."
                     errorPopup.open()
                 } else {
-                    Network.register(
+                    AuthStore.register(
                         usernameField.text,
                         emailField.text,
                         passwordField.text,
@@ -144,7 +144,7 @@ Rectangle {
 
     // Backend error binding
     Connections {
-        target: Network
+        target: AuthStore
         onErrorOccurred: function(message) {
             errorPopup.text = message
             errorPopup.open()

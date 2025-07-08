@@ -44,7 +44,7 @@ Rectangle {
                 width: parent.width
                 height: 80
                 radius: 8
-                color: Theme.card
+                color: Theme.toolTipBase
                 border.color: Theme.accent
                 border.width: 1
 

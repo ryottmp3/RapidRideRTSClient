@@ -87,7 +87,7 @@ ApplicationWindow {
                 Text {
                     text: "🚪 Logout"; font.pixelSize: 16; color: Theme.accent
                     Layout.alignment: Qt.AlignLeft
-                    MouseArea { anchors.fill: parent; onClicked: { navDrawer.close(); controller.loadPage("login.qml") } }
+                    MouseArea { anchors.fill: parent; onClicked: { navDrawer.close(); AuthStore.logout(); controller.loadPage("login.qml") } }
                 }
             }
         }

@@ -19,6 +19,7 @@ from PySide6.QtGui import QDesktopServices, QGuiApplication, QPalette, QColor
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from theme_manager import ThemeManager
 from wallet_store import WalletStore
+from auth_store import AuthStore
 
 
 class Browser(QWidget):
@@ -289,6 +290,7 @@ if __name__ == "__main__":
     theme_controller = ThemeController()
     qrgen = QrGenerator()
     wallet_store = WalletStore()
+    auth_store = AuthStore(api_url = os.getenv("API_URL", "http://127.0.0.1:8000"))
     browser = Browser()
     theme_controller.applyPalette(theme_controller.currentTheme)
     engine.rootContext().setContextProperty("ThemeController", theme_controller)
@@ -297,6 +299,7 @@ if __name__ == "__main__":
     engine.rootContext().setContextProperty("ThemeList", theme_controller.available_themes)
     engine.rootContext().setContextProperty("QrGen", qrgen)
     engine.rootContext().setContextProperty("WalletStore", wallet_store)
+    engine.rootContext().setContextProperty("AuthStore", auth_store)
     engine.rootContext().setContextProperty("Browser", browser)
 
     logger.debug("Loading QML file: main.qml")
