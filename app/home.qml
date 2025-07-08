@@ -1,5 +1,4 @@
 // home.qml – content‑only page (App shell handles navigation)
-// Themed version using ThemeController context properties
 
 import QtQuick 2.15
 import QtQuick.Controls 2.15
@@ -46,6 +45,31 @@ Rectangle {
 
                 onClicked: controller.loadPage(modelData.page)
             }
+        }
+
+        // Admin-only section
+        Button {
+            visible: AuthStore.isAdmin()
+            Layout.fillWidth: true
+            height: 60
+            text: "Admin Tools"
+            font.pixelSize: 18
+
+            background: Rectangle {
+                color: Theme.buttonBackground
+                radius: 8
+                border.color: Theme.accent
+                border.width: 1
+            }
+
+            contentItem: Text {
+                text: "Admin Tools"
+                color: Theme.text
+                font.pixelSize: 18
+                anchors.centerIn: parent
+            }
+
+            onClicked: controller.loadPage("admin.qml")
         }
     }
 }
