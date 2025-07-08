@@ -21,7 +21,7 @@ class NetworkManager(QObject):
     loginFinished    = Signal(bool, str)   # success, message
     registerFinished = Signal(bool, str)   # success, message
     ticketGenerated  = Signal(str)         # base64 payload
-    ticketsFetched   = Signal(list)        # list of dicts
+    ticketsFetched   = Signal('QVariantList')        # list of dicts
     errorOccurred    = Signal(str)         # generic error
     checkoutSessionCreated = Signal(str)   # emits URL user must visit
 
@@ -193,7 +193,7 @@ class NetworkManager(QObject):
             logger.debug("fetchTickets response status=%d", r.status_code)
             r.raise_for_status()
             tickets = r.json()
-            print(f"Tickets: {tickets}")
+            logger.debug(f"Tickets: {tickets}")
             logger.debug("fetchTickets received %d tickets", len(tickets))
             self._ticket_list = tickets
             self.ticketsFetched.emit(self._ticket_list)

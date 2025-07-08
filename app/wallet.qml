@@ -39,6 +39,7 @@ Rectangle {
             spacing: 10
             clip: true
             model: Network.ticketList
+            //console.log(model)
 
             delegate: Rectangle {
                 width: parent.width
@@ -56,7 +57,7 @@ Rectangle {
                     ColumnLayout {
                         spacing: 2
                         Label {
-                            text: model.ticket_type + " – " + model.issued_at
+                            text: model.ticket_type 
                             color: Theme.text
                             font.pixelSize: 14
                         }
@@ -71,8 +72,9 @@ Rectangle {
                         text: "QR"
                         onClicked: {
                             busy.visible = true
-                            currentTicketId = model.ticket_id
-                            Network.loadQRCode(model.ticket_id)
+                            console.log(model)
+                            var currentTicketId = model.ticket_id
+                            QrGen.makeQr(model.ticket_id)
                             qrPopup.open()
                         }
                     }
@@ -123,16 +125,13 @@ Rectangle {
             }
         }
 
-        // Show/hide spinner as qrImage arrives
+        // Populate Wallet
         Connections {
             target: Network
-            onQrImageChanged: {
-                busy.visible = false
-                qrImage.source = Network.qrImage
-            }
-            onErrorOccurred: {
-                busy.visible = false
-            }
+            function onTicketsFetched(ticketList) {
+                console.log("Got", ticketList.length, "tickets from Python")
+                WalletStore.addMultipleTickets(ticketList)
+            } 
         }
     }
 }

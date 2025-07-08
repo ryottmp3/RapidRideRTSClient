@@ -101,7 +101,7 @@ class WalletStore(QObject):
         """
         try:
             self.logger.debug(f"\n PAYLOAD TO VALIDATE: \n {payload}\n")
-            blob = base64.b64decode(json.loads(payload))
+            blob = base64.b64decode(payload)
             self.logger.debug(f" \n DECODED PAYLOAD: \n {blob} \n")
             self.logger.debug(f"Validation Payload: {blob}")
             msg, sig = blob[:-64], blob[-64:]
@@ -173,23 +173,20 @@ class WalletStore(QObject):
         validateTicket() expects.
         """
         for d in ticket_dicts:
-            self.logger.debug(f"Supposed Wrapper: {d}")
             # 1) Extract the raw signature bytes
             sig_b64 = d["signature"]
             sig_bytes = base64.b64decode(sig_b64)
 
             # 2) Build the message dict *without* the signature
-            # msg_dict = {
-            #     "ticket_id":   d["ticket_id"],
-            #     "user_id":     d["user_id"],
-            #     "ticket_type": d["ticket_type"],
-            #     "valid_for":   d["valid_for"],
-            #     "issued_at":   d["issued_at"],
-            #     "issuer":      d["issuer"],
-            #     "status":      d["status"],
-            # }
-            msg_dict = d["ticket"]
-            self.logger.debug(f"\n Ticket: {d["ticket"]}")
+            msg_dict = {
+                "ticket_id":   d["ticket_id"],
+                "user_id":     d["user_id"],
+                "ticket_type": d["ticket_type"],
+                "valid_for":   d["valid_for"],
+                "issued_at":   d["issued_at"],
+                "issuer":      d["issuer"],
+                "status":      d["status"],
+            }
 
             # 3) Canonical JSON encoding
             msg_json = json.dumps(msg_dict, separators=(",", ":"), sort_keys=False)

@@ -1,6 +1,8 @@
 import json
 import base64
 import logging
+import requests
+import os
 from pathlib import Path
 from datetime import datetime
 from PySide6.QtCore import QObject, Signal, Slot, QStandardPaths
@@ -10,7 +12,7 @@ class WalletStore(QObject):
     """
     Persistent wallet storage with ticket validation and debug logging.
     Stores tickets in wallet.json under AppDataLocation.
-    Loads ED25519 public key from ConfigLocation/public_key.pem to validate payloads.
+    Loads ED25519 public key from ConfigLocation or app directory, or fetches it from server.
     Signals:
       - walletLoaded(list): emitted after initial load
       - walletUpdated(list): emitted after add/clear
@@ -28,16 +30,39 @@ class WalletStore(QObject):
         cfg_dir  = QStandardPaths.writableLocation(QStandardPaths.ConfigLocation)
         self._file = Path(data_dir) / "wallet.json"
         Path(data_dir).mkdir(parents=True, exist_ok=True)
-        self.logger.debug("Data directory: %s, Config directory: %s", data_dir, cfg_dir)
+        self.logger.debug("Data directory: %s", data_dir)
+        self.logger.debug("Config directory: %s", cfg_dir)
 
-        # Load public key for ED25519 validation
-        pubkey_path = Path(cfg_dir) / "public_key.pem"
-        if not pubkey_path.exists():
-            self.logger.error("Missing public key at %s", pubkey_path)
-            raise FileNotFoundError(f"Missing public key: {pubkey_path}")
+        # Locate or fetch public key
+        pubkey_path = None
+        search_paths = [Path(cfg_dir) / "public_key.pem", Path(__file__).parent / "public_key.pem"]
+        for p in search_paths:
+            if p.exists():
+                pubkey_path = p
+                self.logger.debug("Using public key at %s", p)
+                break
+        if not pubkey_path:
+            # Fetch from server
+            base_url = os.getenv("API_URL", "http://127.0.0.1:8000")
+            key_url = f"{base_url}/public_key"
+            try:
+                self.logger.debug("Fetching public key from %s", key_url)
+                r = requests.get(key_url, timeout=5)
+                r.raise_for_status()
+                pem = r.content
+                target = Path(cfg_dir) / "public_key.pem"
+                Path(cfg_dir).mkdir(parents=True, exist_ok=True)
+                target.write_bytes(pem)
+                pubkey_path = target
+                self.logger.debug("Fetched and saved public key to %s", target)
+            except Exception as e:
+                self.logger.error("Failed to fetch public key from server: %s", e)
+                raise FileNotFoundError(f"Missing public key and cannot fetch from server: {e}")
+
+        # Load public key
         raw_key = pubkey_path.read_bytes()
         self._pubkey = Ed25519PublicKey.from_public_bytes(raw_key)
-        self.logger.debug("Loaded ED25519 public key")
+        self.logger.debug("Loaded ED25519 public key from %s", pubkey_path)
 
         # Internal ticket list
         self._tickets = []
@@ -76,6 +101,7 @@ class WalletStore(QObject):
         """
         try:
             blob = base64.b64decode(payload)
+            self.logger.debug(f"Validation Payload: {blob}")
             msg, sig = blob[:-64], blob[-64:]
             self._pubkey.verify(sig, msg)
             return True
@@ -83,8 +109,8 @@ class WalletStore(QObject):
             self.logger.debug("validateTicket failed: %s", e)
             return False
 
-    @Slot(str, str)
-    def addTicket(self, payload: str, ticket_type: str):
+    @Slot(str)
+    def addTicket(self, payload: str):
         """Validate and append a new ticket."""
         self.logger.debug("Adding ticket of type %s", ticket_type)
         if not self.validateTicket(payload):
@@ -92,20 +118,34 @@ class WalletStore(QObject):
             return
         ticket = {
             "payload": payload,
-            "type": ticket_type,
         }
         self._tickets.append(ticket)
         self.save()
 
+    @Slot(list)
+    def addMultipleTickets(self, payloads: list):
+        """Validate and append a list of tickets."""
+        self.logger.debug("Payloading tickets")
+        self.logger.debug("Adding tickets")
+        for x in self.generatePayload(payloads):
+            if not self.validateTicket(x):
+                self.logger.error("Payload Validation Failed, not adding")
+                pass
+            ticket = {
+                "payload": x
+            }
+            self._tickets.append(ticket)
+            self.save()
+
     @Slot(int)
     def deleteTicket(self, index: int):
-        """Remove a ticket by its index in the list and save"""
+        """Remove a ticket by its index in the list and save."""
         if 0 <= index < len(self._tickets):
-            self.logger.debug(f"Deleting ticket at index {index}")
+            self.logger.debug("Deleting ticket at index %d", index)
             del self._tickets[index]
             self.save()
         else:
-            self.logger.warning(f"deleteTicket called with invalid index {index}")
+            self.logger.warning("deleteTicket called with invalid index %d", index)
 
     @Slot()
     def clearWallet(self):
@@ -122,3 +162,39 @@ class WalletStore(QObject):
         self.logger.debug("getTickets called, returning %d tickets", len(self._tickets))
         return self._tickets
 
+    def serialize_ticket(
+        self,
+        ticket: dict
+    ) -> str:
+        """Canonical JSON format -- sorted keys, no whitespace"""
+        return json.dumps(ticket, separators=(',', ':'), sort_keys=True)
+
+    def generatePayload(self, data: list) -> list:
+        """Makes payload"""
+        signed_tickets = [
+            {
+                "ticket": {
+                    "ticket_id": d["ticket_id"],
+                    "user_id": d["user_id"],
+                    "ticket_type": d["ticket_type"],
+                    "valid_for": d["valid_for"],
+                    "issued_at": d["issued_at"],
+                    "issuer": d["issuer"],
+                    "status": d["status"]
+                },
+                "signature": d["signature"]
+            } for d in data
+        ]
+        keys = [
+            {
+                "ticket": self.serialize_ticket(k["ticket"]),
+                "signature": k["signature"]
+            } for k in signed_tickets
+        ]
+        payLoad = [
+            base64.b64encode(
+                json.dumps(x).encode()
+            ).decode() for x in keys
+        ]
+        print(f"Pay Loads: {payLoad}")
+        return payLoad
