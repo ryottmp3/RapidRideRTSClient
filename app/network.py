@@ -7,7 +7,9 @@ QObject-based bridge between QML and the FastAPI backend.
 All HTTP is done here; QML receives results via signals or optional callbacks.
 Includes detailed debug logging and persistent auth token via QSettings.
 """
-import base64
+from wallet_store import WalletStore
+import json
+from datetime import datetime as dt
 import logging
 import requests
 from PySide6.QtCore import QObject, Signal, Slot, QSettings, Property
@@ -16,14 +18,16 @@ from PySide6.QtQml import QJSValue
 # Configure logger for this module
 logger = logging.getLogger("rts.network")
 
+
 class NetworkManager(QObject):
     # ----- Signals ---------------------------------------------------------
-    loginFinished    = Signal(bool, str)   # success, message
+    loginFinished = Signal(bool, str)   # success, message
     registerFinished = Signal(bool, str)   # success, message
-    ticketGenerated  = Signal(str)         # base64 payload
-    ticketsFetched   = Signal('QVariantList')        # list of dicts
-    errorOccurred    = Signal(str)         # generic error
+    ticketGenerated = Signal(str)         # base64 payload
+    ticketsFetched = Signal('QVariantList')        # list of dicts
+    errorOccurred = Signal(str)         # generic error
     checkoutSessionCreated = Signal(str)   # emits URL user must visit
+    ticketListChanged = Signal()
 
     # ----- Init ------------------------------------------------------------
     def __init__(self, base_url: str = "http://127.0.0.1:8000"):
@@ -32,13 +36,49 @@ class NetworkManager(QObject):
         self.base_url = base_url
         self._auth_header: str | None = None
         self._ticket_list: list[dict] = []
-        self._qr_image: str = ""
+        self._wallet = WalletStore()
         # Load saved auth header, if any
         saved = self.settings.value("auth_header", "")
+        self._wallet.walletUpdated.connect(self._onWalletUpdated)
         if saved:
             self._auth_header = saved
             logger.debug("Loaded auth_header from QSettings: %s...", saved[:10])
         logger.debug("NetworkManager initialized with base_url=%s", self.base_url)
+
+    # ----- On Wallet Updated ----------------------------------------------
+    def _onWalletUpdated(self, tickets):
+        self._ticket_list = [
+            {
+                "ticket_id": self._extract_ticket_info(t, "ticket_id"),
+                "ticket_type": self._extract_ticket_info(t, "ticket_type"),
+                "status": self._extract_ticket_info(t, "status"),
+                "issued_at": dt.fromisoformat(
+                    self._extract_ticket_info(
+                        t,
+                        "issued_at"
+                    )).strftime("%d %B %Y, %I:%M %p"),
+                "valid_for": self._format_valid_for(
+                    self._extract_ticket_info(t, "valid_for")
+                )
+            } for t in tickets
+        ]
+        for t in self._ticket_list:
+            logger.debug(f"Ticket in summary list: {t}")
+        self.ticketListChanged.emit()
+
+    def _extract_ticket_info(self, t, info: str):
+        payload = t["payload"]
+        return json.loads(payload)[info] if isinstance(payload, str) else payload[info]
+
+    def _format_valid_for(self, value: str) -> str:
+        """Formats the valid for string"""
+        try:
+            if not value or value == "None":
+                return "Any time"
+            dt_obj = dt.strptime(value, "%Y-%m")
+            return dt_obj.strftime("%B %Y")
+        except Exception as e:
+            return "None"
 
     # ----- Already Logged In? ---------------------------------------------
     @Slot(result=bool)
@@ -55,10 +95,10 @@ class NetworkManager(QObject):
 
     # ----- Exposed properties (for wallet.qml) ----------------------------
     def _get_ticket_list(self):
-        logger.debug("Retrieving ticket list, count=%d", len(self._ticket_list))
+        logger.debug("Network._get_ticket_list called.")
         return self._ticket_list
 
-    ticketList = Property("QVariant", _get_ticket_list, constant=True)
+    ticketList = Property("QVariant", _get_ticket_list, notify=ticketListChanged)
 
     # ----- Login -----------------------------------------------------------
     @Slot(str, str, QJSValue, result=None)
@@ -155,8 +195,8 @@ class NetworkManager(QObject):
             self.errorOccurred.emit(f"Failed to create checkout session: {e}")
 
     # ----- Ticket Generation ----------------------------------------------
-    @Slot(str, result=None)
-    def generateTicket(self, ticket_type: str):
+    @Slot(str, str, result=None)
+    def generateTicket(self, ticket_type: str, valid_for: str = ""):
         """POST /generate -> emits ticketGenerated"""
         if not self._auth_header:
             logger.debug("generateTicket called without auth token")
@@ -164,7 +204,7 @@ class NetworkManager(QObject):
             return
         url = f"{self.base_url}/generate"
         headers = {"Authorization": self._auth_header}
-        data = {"ticket_type": ticket_type}
+        data = {"ticket_type": ticket_type, "valid_for": valid_for}
         logger.debug("generateTicket request to %s with type=%s", url, ticket_type)
         try:
             r = requests.post(url, json=data, headers=headers, timeout=8)
@@ -192,33 +232,8 @@ class NetworkManager(QObject):
             r = requests.get(url, headers=headers, timeout=8)
             logger.debug("fetchTickets response status=%d", r.status_code)
             r.raise_for_status()
-            tickets = r.json()
-            logger.debug(f"Tickets: {tickets}")
-            logger.debug("fetchTickets received %d tickets", len(tickets))
-            self._ticket_list = tickets
-            self.ticketsFetched.emit(self._ticket_list)
+            server_ticket_dicts = r.json()
+            self._wallet.syncWithServer(server_ticket_dicts)
         except Exception as e:
             logger.exception("Fetch tickets failed")
             self.errorOccurred.emit(f"Fetch tickets failed: {e}")
-
-    # ----- Load QR image ---------------------------------------------------
-    @Slot(str, result=None)
-    def loadQRCode(self, ticket_id: str):
-        """GET /qr/{ticket_id} -> returns PNG as base64 data string"""
-        if not self._auth_header:
-            logger.debug("loadQRCode called without auth token")
-            self.errorOccurred.emit("No auth token available.")
-            return
-        url = f"{self.base_url}/qr/{ticket_id}"
-        headers = {"Authorization": self._auth_header}
-        logger.debug("loadQRCode request to %s", url)
-        try:
-            r = requests.get(url, headers=headers, timeout=8)
-            logger.debug("loadQRCode response status=%d, content-length=%s", r.status_code, r.headers.get("Content-Length"))
-            r.raise_for_status()
-            self._qr_image = "data:image/png;base64," + base64.b64encode(r.content).decode()
-            logger.debug("loadQRCode image encoded, length=%d", len(self._qr_image))
-        except Exception as e:
-            logger.exception("Load QR code failed for ticket_id %s", ticket_id)
-            self.errorOccurred.emit(f"Load QR failed: {e}")
-

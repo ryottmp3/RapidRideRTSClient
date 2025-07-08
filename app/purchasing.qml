@@ -115,7 +115,7 @@ Item {
                 mall.selectedTicketType = ticketTypeCombo.currentValue
                 if (ticketTypeCombo.currentValue === "monthly_pass") {
                     console.log("Buying pass for", monthCombo.currentText, yearCombo.currentText)
-                    mall.selectedMonth == monthCombo.currentText
+                    mall.selectedMonth = monthCombo.currentText
                     mall.selectedYear = yearCombo.currentText
                 }
                 Network.createCheckoutSession(
@@ -134,79 +134,16 @@ Item {
         }
     }
 
-    // QR Popup
-    Popup {
-        id: qrPopup
-        modal: true
-        width: parent.width      // full window width
-        height: parent.height * 0.6
-        focus: true
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-
-        background: Rectangle {
-            color: Theme.background
-            border.color: Theme.border
-            radius: 10
+    function monthNameToNumber(name) {
+        const months = {
+            "January": "01", "February": "02", "March": "03",
+            "April": "04", "May": "05", "June": "06",
+            "July": "07", "August": "08", "September": "09",
+            "October": "10", "November": "11", "December": "12"
         }
-
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 16
-            spacing: 12
-
-            Label {
-                text: qsTr("Your Ticket")
-                font.pixelSize: 20
-                color: Theme.text
-                Layout.alignment: Qt.AlignHCenter
-            }
-
-            Image {
-                id: qrImage
-                fillMode: Image.PreserveAspectFit
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-            }
-
-            Button {
-                id: closeButton
-                text: qsTr("Close")
-                Layout.alignment: Qt.AlignHCenter
-                background: Rectangle {
-                    radius: 6
-                    color: Theme.accent
-                }
-                contentItem: Text {
-                    text: closeButton.text
-                    anchors.centerIn: parent
-                    color: Theme.text
-                }
-                onClicked: qrPopup.close()
-            }
-        }
+        return months[name] || "01"
     }
 
-    // Listen for Network signals
-    Connections {
-        target: Network
-        function onTicketGenerated(payload) {
-            busy.visible = false
-            QrGen.makeQr(payload)
-        }
-        function onErrorOccurred(err) {
-            busy.visible = false
-            description.text = qsTr("Error: ") + err
-        }
-    }
-
-    // Listen for QR generation
-    Connections {
-        target: QrGen
-        function onQrGenerated(dataUri) {
-            qrImage.source = dataUri
-            qrPopup.open()
-        }
-    }
 
     // Listen for Stripe Checkout URL
     Connections {
@@ -225,7 +162,11 @@ Item {
         
         // Fired when Browser sees "payment-success" in url
         function onCheckoutSuccess() {
-            Network.generateTicket(mall.selectedTicketType)
+            var validFor = ""
+            if (mall.selectedTicketType === "monthly_pass") {
+                validFor = mall.selectedYear + "-" + monthNameToNumber(mall.selectedMonth)
+            }
+            Network.generateTicket(mall.selectedTicketType, validFor)
             controller.loadPage("wallet.qml")
         }
 

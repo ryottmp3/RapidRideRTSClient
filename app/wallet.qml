@@ -39,7 +39,6 @@ Rectangle {
             spacing: 10
             clip: true
             model: Network.ticketList
-            //console.log(model)
 
             delegate: Rectangle {
                 width: parent.width
@@ -57,12 +56,17 @@ Rectangle {
                     ColumnLayout {
                         spacing: 2
                         Label {
-                            text: model.ticket_type 
+                            text: "RapidRide Ticket Type: " + formatTicketType(modelData.ticket_type) 
                             color: Theme.text
                             font.pixelSize: 14
                         }
                         Label {
-                            text: "ID: " + model.ticket_id
+                            text: "Ticket Valid for: " + formatValidFor(modelData.valid_for)
+                            color: Theme.text
+                            font.pixelSize: 12
+                        }
+                        Label {
+                            text: "Issued: " + modelData.issued_at
                             color: Theme.text
                             font.pixelSize: 12
                         }
@@ -71,10 +75,9 @@ Rectangle {
                     Button {
                         text: "QR"
                         onClicked: {
-                            busy.visible = true
-                            console.log(model)
-                            var currentTicketId = model.ticket_id
-                            QrGen.makeQr(model.ticket_id)
+                            console.log("\n\nmodel: ", model)
+                            var currentTicketId = modelData.ticket_id
+                            QrGen.makeQr(modelData.ticket_id)
                             qrPopup.open()
                         }
                     }
@@ -83,55 +86,90 @@ Rectangle {
         }
     }
 
-    // Popup for QR display
+    function formatTicketType(raw) {
+        switch (raw) {
+            case "single_use": return "<b>Single Ride</b>"
+            case "monthly_pass": return "<b>Monthly Pass</b>"
+            default: return raw
+        }
+    }
+
+    function formatValidFor(raw) {
+        switch (raw) {
+            case "None": return "Any Time"
+            default: return raw
+        }
+    }
+ 
+        // QR Popup
     Popup {
         id: qrPopup
-        width: parent.width * 0.8
-        height: parent.height * 0.6
         modal: true
+        width: parent.width      // full window width
+        height: parent.height * 0.6
         focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
         background: Rectangle {
-            color: Theme.surface
-            border.color: Theme.accent
+            color: Theme.background
+            border.color: Theme.border
             radius: 10
         }
 
-        property string currentTicketId: ""
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: 16
-            spacing: 16
+            spacing: 12
 
-            BusyIndicator {
-                id: busy
-                visible: true
-                running: visible
-                anchors.horizontalCenter: parent.horizontalCenter
+            Label {
+                text: qsTr("Your Ticket")
+                font.pixelSize: 20
+                color: Theme.text
+                Layout.alignment: Qt.AlignHCenter
             }
 
             Image {
-                id: qrImage
-                source: Network.qrImage
+                id: qrCodeImage
                 fillMode: Image.PreserveAspectFit
-                anchors.fill: parent
-                visible: !busy.visible
+                Layout.fillWidth: true
+                Layout.fillHeight: true
             }
 
             Button {
-                text: "Close"
+                id: closeButton
+                text: qsTr("Close")
                 Layout.alignment: Qt.AlignHCenter
+                background: Rectangle {
+                    radius: 6
+                    color: Theme.accent
+                }
+                contentItem: Text {
+                    text: closeButton.text
+                    anchors.centerIn: parent
+                    color: Theme.text
+                }
                 onClicked: qrPopup.close()
             }
         }
+    }
 
-        // Populate Wallet
-        Connections {
-            target: Network
-            function onTicketsFetched(ticketList) {
-                console.log("Got", ticketList.length, "tickets from Python")
-                WalletStore.addMultipleTickets(ticketList)
-            } 
+    // Listen for Network signals
+    Connections {
+        target: Network
+        function onTicketGenerated(payload) {
+            QrGen.makeQr(payload)
+        }
+        function onErrorOccurred(err) {
+            description.text = qsTr("Error: ") + err
+        }
+    }
+
+    // Listen for QR generation
+    Connections {
+        target: QrGen
+        function onQrGenerated(dataUri) {
+            qrCodeImage.source = dataUri
+            qrPopup.open()
         }
     }
 }
