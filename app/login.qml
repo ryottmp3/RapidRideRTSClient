@@ -114,6 +114,9 @@ Rectangle {
             if (success) {
                 controller.loadPage("home.qml")
             } else {
+                if (message === "refresh_token") {
+                    controller.loadPage("home.qml")
+                }
                 errorPopup.text = message
                 errorPopup.open()
             }

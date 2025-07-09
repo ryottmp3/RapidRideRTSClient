@@ -1,7 +1,5 @@
 # main.py
 # Main entry point for the RapidRide QML application
-# Exposes Python backend and page controller to QML
-
 import os
 import io
 import base64
@@ -20,6 +18,8 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 from theme_manager import ThemeManager
 from wallet_store import WalletStore
 from auth_store import AuthStore
+from admin import AdminStore
+from qr_scanner import QrScanner
 
 
 class Browser(QWidget):
@@ -291,6 +291,8 @@ if __name__ == "__main__":
     qrgen = QrGenerator()
     wallet_store = WalletStore()
     auth_store = AuthStore(api_url = os.getenv("API_URL", "http://127.0.0.1:8000"))
+    admin_store = AdminStore(auth_store)
+    qr_scanner = QrScanner()
     browser = Browser()
     theme_controller.applyPalette(theme_controller.currentTheme)
     engine.rootContext().setContextProperty("ThemeController", theme_controller)
@@ -300,6 +302,8 @@ if __name__ == "__main__":
     engine.rootContext().setContextProperty("QrGen", qrgen)
     engine.rootContext().setContextProperty("WalletStore", wallet_store)
     engine.rootContext().setContextProperty("AuthStore", auth_store)
+    engine.rootContext().setContextProperty("Admin", admin_store)
+    engine.rootContext().setContextProperty("QrScanner", qr_scanner)
     engine.rootContext().setContextProperty("Browser", browser)
 
     logger.debug("Loading QML file: main.qml")
@@ -315,7 +319,7 @@ if __name__ == "__main__":
         sys.exit(-1)
 
     logger.debug("Setting up NetworkManager, Controller, AppBackend")
-    network = NetworkManager(os.getenv("API_URL", "http://127.0.0.1:8000"))
+    network = NetworkManager(os.getenv("API_URL", "http://127.0.0.1:8000"), auth_store=auth_store)
     backend = AppBackend(browser)
     controller = Controller(loader)
     engine.rootContext().setContextProperty("Network", network)

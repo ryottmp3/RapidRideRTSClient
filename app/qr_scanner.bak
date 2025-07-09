@@ -1,0 +1,70 @@
+# qr_scanner.py
+
+import cv2
+from pyzbar.pyzbar import decode
+from PySide6.QtCore import QObject, Signal, Slot, QTimer
+import threading
+import logging
+
+logger = logging.getLogger("rts.qrscanner")
+
+class QrScanner(QObject):
+    qrScanned = Signal(str)
+    errorOccurred = Signal(str)
+
+    def __init__(self, camera_index=0):
+        super().__init__()
+        self.camera_index = camera_index
+        self.cap = None
+        self._running = False
+        self.thread = None
+
+    @Slot()
+    def start(self):
+        if self._running:
+            logger.warning("QR scanner already running")
+            return
+
+        logger.debug("Starting QR scanner thread")
+        self._running = True
+        self.thread = threading.Thread(target=self._scan_loop, daemon=True)
+        self.thread.start()
+
+    @Slot()
+    def stop(self):
+        logger.debug("Stopping QR scanner")
+        self._running = False
+        if self.cap:
+            self.cap.release()
+        cv2.destroyAllWindows()
+
+    def _scan_loop(self):
+        self.cap = cv2.VideoCapture(self.camera_index)
+        if not self.cap.isOpened():
+            self.errorOccurred.emit("Could not open camera.")
+            self._running = False
+            return
+
+        logger.info("QR scanner active. Press 'q' in the window to stop.")
+
+        while self._running:
+            ret, frame = self.cap.read()
+            if not ret:
+                continue
+
+            decoded_objs = decode(frame)
+            for obj in decoded_objs:
+                data = obj.data.decode("utf-8")
+                logger.info(f"QR Detected: {data}")
+                self.qrScanned.emit(data)
+                self.stop()
+                return
+
+            # Show preview window
+            cv2.imshow("QR Scanner", frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                logger.info("Scanner manually stopped by user.")
+                break
+
+        self.stop()
+

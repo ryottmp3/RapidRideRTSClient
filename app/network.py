@@ -1,51 +1,33 @@
-# Network.py
-#!/usr/bin/env python3
-"""
-network.py
+# Updated Network.py
 
-QObject-based bridge between QML and the FastAPI backend.
-All HTTP is done here; QML receives results via signals or optional callbacks.
-Includes detailed debug logging and persistent auth token via QSettings.
-"""
 from wallet_store import WalletStore
 import json
 from datetime import datetime as dt
 import logging
 import requests
-from PySide6.QtCore import QObject, Signal, Slot, QSettings, Property
+from PySide6.QtCore import QObject, Signal, Slot, Property
 from PySide6.QtQml import QJSValue
 
-# Configure logger for this module
 logger = logging.getLogger("rts.network")
 
-
 class NetworkManager(QObject):
-    # ----- Signals ---------------------------------------------------------
-    loginFinished = Signal(bool, str)   # success, message
-    registerFinished = Signal(bool, str)   # success, message
-    ticketGenerated = Signal(str)         # base64 payload
-    ticketsFetched = Signal('QVariantList')        # list of dicts
-    errorOccurred = Signal(str)         # generic error
-    checkoutSessionCreated = Signal(str)   # emits URL user must visit
+    loginFinished = Signal(bool, str)
+    registerFinished = Signal(bool, str)
+    ticketGenerated = Signal(str)
+    ticketsFetched = Signal('QVariantList')
+    errorOccurred = Signal(str)
+    checkoutSessionCreated = Signal(str)
     ticketListChanged = Signal()
 
-    # ----- Init ------------------------------------------------------------
-    def __init__(self, base_url: str = "http://127.0.0.1:8000"):
+    def __init__(self, base_url: str = "http://127.0.0.1:8000", auth_store=None):
         super().__init__()
-        self.settings = QSettings()
         self.base_url = base_url
-        self._auth_header: str | None = None
+        self.auth_store = auth_store
         self._ticket_list: list[dict] = []
         self._wallet = WalletStore()
-        # Load saved auth header, if any
-        saved = self.settings.value("auth_header", "")
         self._wallet.walletUpdated.connect(self._onWalletUpdated)
-        if saved:
-            self._auth_header = saved
-            logger.debug("Loaded auth_header from QSettings: %s...", saved[:10])
         logger.debug("NetworkManager initialized with base_url=%s", self.base_url)
 
-    # ----- On Wallet Updated ----------------------------------------------
     def _onWalletUpdated(self, tickets):
         self._ticket_list = [
             {
@@ -53,10 +35,8 @@ class NetworkManager(QObject):
                 "ticket_type": self._extract_ticket_info(t, "ticket_type"),
                 "status": self._extract_ticket_info(t, "status"),
                 "issued_at": dt.fromisoformat(
-                    self._extract_ticket_info(
-                        t,
-                        "issued_at"
-                    )).strftime("%d %B %Y, %I:%M %p"),
+                    self._extract_ticket_info(t, "issued_at")
+                ).strftime("%d %B %Y, %I:%M %p"),
                 "valid_for": self._format_valid_for(
                     self._extract_ticket_info(t, "valid_for")
                 )
@@ -71,119 +51,46 @@ class NetworkManager(QObject):
         return json.loads(payload)[info] if isinstance(payload, str) else payload[info]
 
     def _format_valid_for(self, value: str) -> str:
-        """Formats the valid for string"""
         try:
             if not value or value == "None":
                 return "Any time"
             dt_obj = dt.strptime(value, "%Y-%m")
             return dt_obj.strftime("%B %Y")
-        except Exception as e:
+        except Exception:
             return "None"
 
-    # ----- Already Logged In? ---------------------------------------------
     @Slot(result=bool)
     def isLoggedIn(self) -> bool:
-        logged_in = self._auth_header is not None
+        logged_in = self.auth_store and self.auth_store.is_logged_in()
         logger.debug("isLoggedIn called, result=%s", logged_in)
         return logged_in
 
-    # ----- Auth token helpers ---------------------------------------------
-    def _set_token(self, token: str, token_type: str = "Bearer"):
-        self._auth_header = f"{token_type} {token}"
-        self.settings.setValue("auth_header", self._auth_header)
-        logger.debug("Saved auth_header to QSettings: %s...", token[:10])
-
-    # ----- Exposed properties (for wallet.qml) ----------------------------
     def _get_ticket_list(self):
         logger.debug("Network._get_ticket_list called.")
         return self._ticket_list
 
     ticketList = Property("QVariant", _get_ticket_list, notify=ticketListChanged)
 
-    # ----- Login -----------------------------------------------------------
-    @Slot(str, str, QJSValue, result=None)
-    def login(self, username: str, password: str, callback: QJSValue | None = None):
-        """OAuth2 password grant -> /token"""
-        url = f"{self.base_url}/token"
-        headers = {"Content-Type": "application/x-www-form-urlencoded"}
-        data = {"username": username, "password": password}
-        logger.debug("Login request to %s with username=%s", url, username)
-        try:
-            r = requests.post(url, data=data, headers=headers, timeout=8)
-            logger.debug("Login response status=%d", r.status_code)
-            r.raise_for_status()
-            resp_json = r.json()
-            logger.debug("Login response JSON: %s", resp_json)
-            self._set_token(resp_json["access_token"], resp_json["token_type"])
-            msg = "Login successful."
-            self.loginFinished.emit(True, msg)
-            if callback and callback.isCallable():
-                callback.call([True, msg])
-        except Exception as e:
-            logger.exception("Login failed for user %s", username)
-            msg = f"Login failed: {e}"
-            self.loginFinished.emit(False, msg)
-            if callback and callback.isCallable():
-                callback.call([False, msg])
-
-    # ----- Registration ----------------------------------------------------
-    @Slot(str, str, str, QJSValue, result=None)
-    def register(self, username: str, email: str, password: str, callback: QJSValue | None = None):
-        """Create account -> /register"""
-        url = f"{self.base_url}/register"
-        payload = {"username": username, "email": email or None, "password": password}
-        logger.debug("Register request to %s payload=%s", url, payload)
-        try:
-            r = requests.post(url, json=payload, timeout=8)
-            logger.debug("Register response status=%d", r.status_code)
-            r.raise_for_status()
-            resp_json = r.json()
-            logger.debug("Register response JSON: %s", resp_json)
-            # Store token from registration as well
-            self._set_token(resp_json["access_token"], resp_json["token_type"])
-            # auto-login for QML flow
-            self.login(username, password)
-            msg = "Registration successful."
-            self.registerFinished.emit(True, msg)
-            if callback and callback.isCallable():
-                callback.call([True, msg])
-        except Exception as e:
-            logger.exception("Registration failed for user %s", username)
-            msg = f"Registration failed: {e}"
-            self.registerFinished.emit(False, msg)
-            if callback and callback.isCallable():
-                callback.call([False, msg])
-
-    # ----- Logout ----------------------------------------------------------
-    @Slot(result=None)
-    def logout(self):
-        """Clear JWT from memory (client-side logout)"""
-        logger.debug("Logout called, clearing auth header and settings")
-        self.settings.remove("auth_header")
-        self._auth_header = None
-        self._ticket_list = []
-        self._qr_image = ""
-
-    # ----- Create Stripe Checkout Session ---------------------------------
     @Slot(str, "QJSValue", result=None)
-    def createCheckoutSession(
-        self,
-        ticket_type: str,
-        callback: QJSValue = None
-    ):
-        """Ask server to create a Stripe checkout Session"""
+    def createCheckoutSession(self, ticket_type: str, callback: QJSValue = None):
+        token = self.auth_store.get_access_token()
+        if not token:
+            self.errorOccurred.emit("You must be logged in.")
+            return
+
         url = f"{self.base_url}/create-checkout-session"
-        headers = {"Authorization": self._auth_header} if self._auth_header else {}
+        headers = {"Authorization": f"Bearer {token}"}
+
         try:
             logger.debug("Creating Stripe Checkout Session")
-            r = requests.post(
-                url,
-                json={
-                    "ticket_type": ticket_type
-                },
-                headers=headers,
-                timeout=8
-            )
+            r = requests.post(url, json={"ticket_type": ticket_type}, headers=headers, timeout=8)
+
+            if r.status_code == 401 and self.auth_store.refresh_tokens():
+                logger.debug("Access token expired. Retrying after refresh.")
+                token = self.auth_store.get_access_token()
+                headers = {"Authorization": f"Bearer {token}"}
+                r = requests.post(url, json={"ticket_type": ticket_type}, headers=headers, timeout=8)
+
             r.raise_for_status()
             session_url = r.json()["url"]
             self.checkoutSessionCreated.emit(session_url)
@@ -194,21 +101,23 @@ class NetworkManager(QObject):
             logger.error(f"Stripe Checkout Session Creation Failed: {e}")
             self.errorOccurred.emit(f"Failed to create checkout session: {e}")
 
-    # ----- Ticket Generation ----------------------------------------------
     @Slot(str, str, result=None)
     def generateTicket(self, ticket_type: str, valid_for: str = ""):
-        """POST /generate -> emits ticketGenerated"""
-        if not self._auth_header:
+        token = self.auth_store.get_access_token()
+        if not token:
             logger.debug("generateTicket called without auth token")
             self.errorOccurred.emit("No auth token available.")
             return
         url = f"{self.base_url}/generate"
-        headers = {"Authorization": self._auth_header}
+        headers = {"Authorization": f"Bearer {token}"}
         data = {"ticket_type": ticket_type, "valid_for": valid_for}
         logger.debug("generateTicket request to %s with type=%s", url, ticket_type)
         try:
             r = requests.post(url, json=data, headers=headers, timeout=8)
-            logger.debug("generateTicket response status=%d", r.status_code)
+            if r.status_code == 401 and self.auth_store.refresh_tokens():
+                token = self.auth_store.get_access_token()
+                headers = {"Authorization": f"Bearer {token}"}
+                r = requests.post(url, json=data, headers=headers, timeout=8)
             r.raise_for_status()
             payload = r.json().get("payload", "")
             logger.debug("generateTicket payload length=%d", len(payload))
@@ -217,23 +126,26 @@ class NetworkManager(QObject):
             logger.exception("Ticket generation failed for type %s", ticket_type)
             self.errorOccurred.emit(f"Ticket generation failed: {e}")
 
-    # ----- Fetch ticket list ----------------------------------------------
     @Slot(result=None)
     def fetchTickets(self):
-        """GET /wallet -> updates ticketList & emits ticketsFetched"""
-        if not self._auth_header:
+        token = self.auth_store.get_access_token()
+        if not token:
             logger.debug("fetchTickets called without auth token")
             self.errorOccurred.emit("No auth token available.")
             return
         url = f"{self.base_url}/wallet"
-        headers = {"Authorization": self._auth_header}
+        headers = {"Authorization": f"Bearer {token}"}
         logger.debug("fetchTickets request to %s", url)
         try:
             r = requests.get(url, headers=headers, timeout=8)
-            logger.debug("fetchTickets response status=%d", r.status_code)
+            if r.status_code == 401 and self.auth_store.refresh_tokens():
+                token = self.auth_store.get_access_token()
+                headers = {"Authorization": f"Bearer {token}"}
+                r = requests.get(url, headers=headers, timeout=8)
             r.raise_for_status()
             server_ticket_dicts = r.json()
             self._wallet.syncWithServer(server_ticket_dicts)
         except Exception as e:
             logger.exception("Fetch tickets failed")
             self.errorOccurred.emit(f"Fetch tickets failed: {e}")
+

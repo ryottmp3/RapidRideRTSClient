@@ -1,0 +1,117 @@
+// qrscanner.qml – Qt 6.9-compatible camera QR scanner with overlay
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+import QtQuick.Layouts 1.15
+import QtMultimedia 6.6
+
+Rectangle {
+    id: root
+    color: Theme.background
+    anchors.fill: parent
+
+    property bool scanning: false
+    property int qrX: 0
+    property int qrY: 0
+    property int qrW: 0
+    property int qrH: 0
+    property bool showOverlay: false
+
+    ColumnLayout {
+        anchors.fill: parent
+        anchors.margins: 16
+        spacing: 12
+
+        Label {
+            text: "Scan a QR Code"
+            font.pixelSize: 24
+            color: Theme.text
+            Layout.alignment: Qt.AlignHCenter
+        }
+
+        Item {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 240
+
+            VideoOutput {
+                id: videoView
+                anchors.fill: parent
+                fillMode: VideoOutput.PreserveAspectCrop
+            }
+
+            Component.onCompleted: {
+                console.log("videoView.videoSink is", videoView.videoSink)
+
+                QrScanner.setVideoOutput(videoView)
+            }
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.top: parent.top
+                x: qrX
+                y: qrY
+                width: qrW
+                height: qrH
+                visible: showOverlay
+                color: "transparent"
+                border.color: "#00FF00"
+                border.width: 2
+                radius: 4
+            }
+        }
+
+        Camera {
+            id: camera
+            active: scanning
+        }
+
+        CaptureSession {
+            id: captureSession
+            camera: camera
+            videoOutput: videoView
+        }
+
+        Button {
+            text: scanning ? "Stop Scanner" : "Start Scanner"
+            Layout.alignment: Qt.AlignHCenter
+            onClicked: root.scanning = !root.scanning
+        }
+
+        Button {
+            text: "Back"
+            Layout.alignment: Qt.AlignHCenter
+            onClicked: {
+                root.scanning = false
+                controller.loadPage("home.qml")
+            }
+        }
+    }
+
+    Connections {
+        target: QrScanner
+
+        function onQrScanned(data) {
+            console.log("Scanned:", data)
+            root.scanning = false
+            showOverlay = true
+            controller.loadPage("validate.qml")
+        }
+
+        function onQrBoundingBox(x, y, w, h) {
+            console.log("Bounding Box: ", x, y, w, h)
+            qrX = x
+            qrY = y
+            qrW = w
+            qrH = h
+            showOverlay = true
+        }
+
+        function onErrorOccurred(msg) {
+            console.error("Scanner error:", msg)
+        }
+    }
+
+    Component.onCompleted: {
+        root.scanning = true
+    }
+}
+

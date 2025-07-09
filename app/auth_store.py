@@ -75,6 +75,7 @@ class AuthStore(QObject):
                 self._tokens["refresh_token"] = tokens["refresh_token"]
                 self._save_tokens()
                 self.loginStatusChanged.emit(True)
+                self._fetch_user_info()
                 return True
             else:
                 self.logger.warning("Refresh failed: %s", r.text)
@@ -96,6 +97,7 @@ class AuthStore(QObject):
                 self._save_tokens()
                 self.loginFinished.emit(True, "Login successful.")
                 self.loginStatusChanged.emit(True)
+                self._fetch_user_info()
             else:
                 self.logger.warning("Login failed: %s", r.text)
                 self.loginFinished.emit(False, "Invalid username or password.")
@@ -133,3 +135,19 @@ class AuthStore(QObject):
                 self.logger.warning("Logout request failed: %s", e)
         self._clear_tokens()
 
+    def _fetch_user_info(self):
+        try:
+            headers = {"Authorization": f"Bearer {self.get_access_token()}"}
+            r = requests.get(f"{self.api_url}/users/me", headers=headers)
+            if r.status_code == 200:
+                user_info = r.json()
+                self._tokens["is_admin"] = user_info.get("is_admin", False)
+                self._save_tokens()
+                return True
+        except Exception as e:
+            self.logger.warning("Fetching user info failed: %s", e)
+        return False
+
+    @Slot(result=bool)
+    def isAdmin(self):
+        return self._tokens.get("is_admin", False)

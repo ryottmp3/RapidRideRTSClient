@@ -160,7 +160,7 @@ Rectangle {
             QrGen.makeQr(payload)
         }
         function onErrorOccurred(err) {
-            description.text = qsTr("Error: ") + err
+            text = qsTr("Error: ") + err
         }
     }
 
