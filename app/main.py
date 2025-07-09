@@ -313,7 +313,9 @@ if __name__ == "__main__":
     theme_controller = ThemeController()
     qrgen = QrGenerator()
     wallet_store = WalletStore()
-    auth_store = AuthStore(api_url = os.getenv("API_URL", "http://127.0.0.1:8000"))
+    auth_store = AuthStore(
+        api_url=os.getenv("API_URL", "http://127.0.0.1:8000")
+    )
     admin_store = AdminStore(auth_store)
     qr_scanner = QrScanner()
     browser = Browser()
@@ -342,7 +344,12 @@ if __name__ == "__main__":
         sys.exit(-1)
 
     logger.debug("Setting up NetworkManager, Controller, AppBackend")
-    network = NetworkManager(os.getenv("API_URL", "http://127.0.0.1:8000"), auth_store=auth_store)
+    network = NetworkManager(
+        os.getenv("API_URL", "http://127.0.0.1:8000"),
+        auth_store=auth_store,
+        wallet_store=wallet_store
+    )
+    wallet_store._set_network_manager(network)
     backend = AppBackend(browser)
     controller = Controller(loader)
     engine.rootContext().setContextProperty("Network", network)
@@ -358,4 +365,3 @@ if __name__ == "__main__":
 
     logger.debug("Starting Qt event loop")
     sys.exit(app.exec())
-

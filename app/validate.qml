@@ -72,6 +72,27 @@ Rectangle {
         }
 
         Button {
+            text: "Use Ticket"
+            Layout.alignment: Qt.AlignHCenter
+            background: Rectangle {
+                color: Theme.buttonBackground
+                radius: 8
+            }
+            contentItem: Text {
+                text: parent.text
+                color: Theme.buttonText
+                font.pixelSize: 14
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                anchors.centerIn: parent
+            }
+            onClicked: {
+                resultLabel.text = "✅ Marking Ticket as Used... "
+                Network.useTicket(scannedPayload)
+            }
+        }
+
+        Button {
             text: "Back"
             Layout.alignment: Qt.AlignHCenter
             background: Rectangle {
@@ -96,6 +117,18 @@ Rectangle {
         function onTicketValidated(response) {
             if (response.status === "valid") {
                 resultLabel.text = "✅ Ticket valid!"
+            } else if (response.status === "already_used") {
+                resultLabel.text = "⚠️ Ticket has already been used."
+            } else if (response.status === "invalid") {
+                resultLabel.text = "❌ Invalid ticket."
+            } else {
+                resultLabel.text = "❓ Unknown error occurred."
+            }
+        }
+        
+        function onTicketUsed(response) {
+            if (response.status === "valid") {
+                resultLabel.text = "✅ Ticket marked as used!"
             } else if (response.status === "already_used") {
                 resultLabel.text = "⚠️ Ticket has already been used."
             } else if (response.status === "invalid") {

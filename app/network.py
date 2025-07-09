@@ -1,6 +1,5 @@
 # Updated Network.py
 
-from wallet_store import WalletStore
 import json
 from datetime import datetime as dt
 import logging
@@ -9,6 +8,7 @@ from PySide6.QtCore import QObject, Signal, Slot, Property
 from PySide6.QtQml import QJSValue
 
 logger = logging.getLogger("rts.network")
+
 
 class NetworkManager(QObject):
     loginFinished = Signal(bool, str)
@@ -19,13 +19,19 @@ class NetworkManager(QObject):
     checkoutSessionCreated = Signal(str)
     ticketListChanged = Signal()
     ticketValidated = Signal("QVariantMap")
+    ticketUsed = Signal("QVariantMap")
 
-    def __init__(self, base_url: str = "http://127.0.0.1:8000", auth_store=None):
+    def __init__(
+        self,
+        base_url: str = "http://127.0.0.1:8000",
+        auth_store=None,
+        wallet_store=None
+    ):
         super().__init__()
         self.base_url = base_url
         self.auth_store = auth_store
         self._ticket_list: list[dict] = []
-        self._wallet = WalletStore()
+        self._wallet = wallet_store
         self._wallet.walletUpdated.connect(self._onWalletUpdated)
         logger.debug("NetworkManager initialized with base_url=%s", self.base_url)
 
@@ -152,6 +158,7 @@ class NetworkManager(QObject):
 
     @Slot(str)
     def validateTicket(self, payload: str):
+        """Validates ticket_id against the database to see if it is used."""
         logger.debug(f"Validating ticket: {payload}")
         url = f"{self.base_url}/check-ticket"
         try:
@@ -164,3 +171,17 @@ class NetworkManager(QObject):
             logger.error(f"Ticket validation failed: {e}")
             self.ticketValidated.emit({"status": "error", "detail": str(e)})
 
+    @Slot(str)
+    def useTicket(self, ticket_id: str):
+        """Sends a request to the server to mark the ticket as used."""
+        logger.debug(f"Marking as used ticket: {ticket_id}")
+        url = f"{self.base_url}/use-ticket"
+        try:
+            r = requests.post(url, json={"ticket_id": ticket_id}, timeout=8)
+            r.raise_for_status()
+            result = r.json()
+            logger.debug(f"Ticket usage result: {result}")
+            self.ticketUsed.emit(result)
+        except Exception as e:
+            logger.error(f"Ticket usage request failed: {e}")
+            self.ticketUsed.emit({"status": "error", "detail": str(e)})
