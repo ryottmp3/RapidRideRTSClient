@@ -268,7 +268,7 @@ class WalletStore(QObject):
         server_ids = set(server_by_id.keys())
         kept = []
         for t in self._tickets:
-            tid = self._extract_ticket_id(t)
+            tid = t["ticket_id"]
             if tid in server_ids:
                 if tid not in used_or_expired_tickets:
                     # self.logger.debug(f"syncWithServer adding ticket: {t}")

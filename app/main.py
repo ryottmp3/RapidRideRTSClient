@@ -314,7 +314,7 @@ if __name__ == "__main__":
     qrgen = QrGenerator()
     wallet_store = WalletStore()
     auth_store = AuthStore(
-        api_url=os.getenv("API_URL", "http://127.0.0.1:8000")
+        api_url=os.getenv("API_URL", "http://ryott.gay:8000")
     )
     admin_store = AdminStore(auth_store)
     qr_scanner = QrScanner()
@@ -345,7 +345,7 @@ if __name__ == "__main__":
 
     logger.debug("Setting up NetworkManager, Controller, AppBackend")
     network = NetworkManager(
-        os.getenv("API_URL", "http://127.0.0.1:8000"),
+        os.getenv("API_URL", "http://ryott.gay:8000"),
         auth_store=auth_store,
         wallet_store=wallet_store
     )
