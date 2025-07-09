@@ -54,7 +54,7 @@ class NetworkManager(QObject):
         self.ticketListChanged.emit()
 
     def _extract_ticket_info(self, t, info: str):
-        payload = t["payload"]
+        payload = t
         return json.loads(payload)[info] if isinstance(payload, str) else payload[info]
 
     def _format_valid_for(self, value: str) -> str:

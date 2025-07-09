@@ -96,8 +96,11 @@ class WalletStore(QObject):
                 # Dropped ED25519 Validation for pre-existing tickets.
                 # Rather, server-verification of ticket status is preferred.
                 # This is taken care of in syncWithServer
-                self.logger.debug(f"walletStore.load: ticket: {ticket}")
-                valid.append(ticket)
+                if isinstance(ticket, str):
+                    ticket = json.loads(ticket)
+                if isinstance(ticket, dict):
+                    self.logger.debug(f"walletStore.load: ticket: {ticket}")
+                    valid.append(ticket)
             self._tickets = valid
         else:
             self.logger.debug("Wallet file does not exist, starting empty")
@@ -212,11 +215,6 @@ class WalletStore(QObject):
     def dumpTicket(self, ticket):
         return json.dumps(ticket, separators=(',', ':'), sort_keys=False)
 
-    def _extract_ticket_id(self, t):
-        payload = t["payload"]
-        self.logger.debug(f"walletStore._extract_ticket_id.payload: {json.loads(payload)["ticket_id"]}")
-        return json.loads(payload)["ticket_id"] if isinstance(payload, str) else payload["ticket_id"]
-
     def syncWithServer(self, server_ticket_dicts: list[dict]):
         """
         Given fresh ticket dicts from the server, add new/updated tickets
@@ -227,9 +225,12 @@ class WalletStore(QObject):
                 len(server_ticket_dicts)
             } server tickets."
         )
+        self.logger.debug(
+            f"Server Ticket Dicts: \n{server_ticket_dicts}"
+        )
 
         local_by_id = {
-            self._extract_ticket_id(t): t
+            t["ticket_id"]: t
             for t in self._tickets
         }
 
@@ -243,20 +244,27 @@ class WalletStore(QObject):
         new_tickets = []
         used_or_expired_tickets = []
         for tid, server_ticket in server_by_id.items():
+            self.logger.debug(f"server_by_id.ticket_id: {tid}")
+            self.logger.debug(f"server_by_id.server_ticket: {server_ticket}")
+            self.logger.debug(
+                f"server_by_id.server_ticket['status']: {
+                    server_ticket["status"]
+                }"
+            )
             sig = server_ticket["signature"]
             ticket_dict = json.loads(server_ticket["ticket"])
             if tid not in local_by_id:
-                # Check new tickets for ED25519 Validation
-                self.logger.debug("New ticket from server: %s", tid)
-                if self.validateTicket(ticket_dict, sig):
-                    new_tickets.append(server_ticket["ticket"])
+                # Check nonlocal tickets for usage: if it's used, it's not new
+                if server_ticket["status"]:
+                    self.logger.debug("New ticket from server: %s", tid)
+                    if self.validateTicket(ticket_dict, sig):
+                        new_tickets.append(ticket_dict)
             else:
-                # Check pre-existing tickets for usage via status
-                if ticket_dict["status"] is False:
-                    used_or_expired_tickets.append(ticket_dict["ticket_id"])
-                print(f"ticket_dict: {ticket_dict}")
+                # Check local tickets for usage
+                if not server_ticket["status"]:
+                    used_or_expired_tickets.append(tid)
 
-        # Remove tickets no longer present
+        # Remove tickets no longer present or marked as used
         server_ids = set(server_by_id.keys())
         kept = []
         for t in self._tickets:
@@ -265,6 +273,8 @@ class WalletStore(QObject):
                 if tid not in used_or_expired_tickets:
                     # self.logger.debug(f"syncWithServer adding ticket: {t}")
                     kept.append(t)
+                else:
+                    self.logger.debug(f"Removing used ticket: {tid}")
             else:
                 self.logger.debug("Removing stale ticket: %s", tid)
 
