@@ -201,16 +201,39 @@ class ThemeController(QObject):
 
 
 class Controller(QObject):
-    """Handles Navigation between QML pages using a Loader"""
     def __init__(self, loader):
         super().__init__()
         self.loader = loader
+        self._pendingPageData = {}
         self.logger = logging.getLogger("rts.client.main")
 
     @Slot(str)
     def loadPage(self, page):
         self.logger.debug("Loading page: %s", page)
+        self._pendingPageData = {}  # clear if no data
         self.loader.setProperty("source", page)
+
+    @Slot(str, 'QVariantMap')
+    def loadPageWithData(self, page, data):
+        self.logger.debug(f"Loading page: {page} with data: {data}")
+        self._pendingPageData = data
+        self.loader.setProperty("source", page)
+
+    @Property('QVariantMap')
+    def pageData(self):
+        return self._pendingPageData
+
+# class Controller(QObject):
+#     """Handles Navigation between QML pages using a Loader"""
+#     def __init__(self, loader):
+#         super().__init__()
+#         self.loader = loader
+#         self.logger = logging.getLogger("rts.client.main")
+# 
+#     @Slot(str)
+#     def loadPage(self, page):
+#         self.logger.debug("Loading page: %s", page)
+#         self.loader.setProperty("source", page)
 
 class AppBackend(QObject):
     checkoutSuccess = Signal()

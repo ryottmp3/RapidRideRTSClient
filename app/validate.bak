@@ -6,7 +6,7 @@ import QtQuick.Layouts 1.15
 Item {
     id: validationPage
     anchors.fill: parent
-    property string scannedPayload: ""
+    property string scannedPayload: controller.pageData["scannedPayload"] || ""
 
     ColumnLayout {
         anchors.centerIn: parent

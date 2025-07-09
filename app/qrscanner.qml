@@ -1,4 +1,4 @@
-// qrscanner.qml – Qt 6.9-compatible camera QR scanner with overlay
+// qrscanner.qml – Theme-aware QR Scanner (Segfault-safe)
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
@@ -6,8 +6,8 @@ import QtMultimedia 6.6
 
 Rectangle {
     id: root
-    color: Theme.background
     anchors.fill: parent
+    color: Theme.background
 
     property int qrX: 0
     property int qrY: 0
@@ -24,12 +24,60 @@ Rectangle {
             text: "Scan a QR Code"
             font.pixelSize: 24
             color: Theme.text
+            horizontalAlignment: Text.AlignHCenter
             Layout.alignment: Qt.AlignHCenter
         }
 
-        Item {
+        Loader {
+            id: videoLoader
+            active: true
+            sourceComponent: videoComponent
             Layout.fillWidth: true
-            Layout.preferredHeight: 240
+            Layout.preferredHeight: 300
+        }
+
+        Rectangle {
+            x: qrX
+            y: qrY
+            width: qrW
+            height: qrH
+            visible: showOverlay
+            color: "transparent"
+            border.color: Theme.accent
+            border.width: 2
+            radius: 4
+        }
+
+        Button {
+            text: "Back"
+            Layout.alignment: Qt.AlignHCenter
+            background: Rectangle {
+                color: Theme.buttonBackground
+                radius: 8
+            }
+            contentItem: Text {
+                text: parent.text
+                color: Theme.buttonText
+                font.pixelSize: 14
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                anchors.centerIn: parent
+            }
+            onClicked: {
+                videoLoader.active = false
+                Qt.callLater(function () {
+                    QrScanner.shutdown()
+                    controller.loadPage("home.qml")
+                })
+            }
+        }
+    }
+
+    Component {
+        id: videoComponent
+
+        Item {
+            anchors.fill: parent
 
             VideoOutput {
                 id: videoView
@@ -37,30 +85,8 @@ Rectangle {
                 fillMode: VideoOutput.PreserveAspectCrop
             }
 
-            Rectangle {
-                x: qrX
-                y: qrY
-                width: qrW
-                height: qrH
-                visible: showOverlay
-                color: "transparent"
-                border.color: "#00FF00"
-                border.width: 2
-                radius: 4
-            }
-
             Component.onCompleted: {
-                console.log("videoView.videoSink is", videoView.videoSink)
                 QrScanner.setVideoOutput(videoView)
-            }
-        }
-
-        Button {
-            text: "Back"
-            Layout.alignment: Qt.AlignHCenter
-            onClicked: {
-                QrScanner.stop()
-                controller.loadPage("home.qml")
             }
         }
     }
@@ -70,12 +96,19 @@ Rectangle {
 
         function onQrScanned(data) {
             console.log("Scanned:", data)
-            showOverlay = true
-            controller.loadPage("validate.qml")  // or handle payload
+
+            // Step 1: Unload video output
+            videoLoader.active = false
+
+            // Step 2: Shutdown camera + switch page
+            Qt.callLater(function () {
+                QrScanner.shutdown()
+                controller.loadPageWithData("validate.qml", { "scannedPayload": data })
+            })
         }
 
         function onQrBoundingBox(x, y, w, h) {
-            console.log("Bounding Box: ", x, y, w, h)
+            console.log("Bounding Box:", x, y, w, h)
             qrX = x
             qrY = y
             qrW = w

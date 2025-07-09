@@ -18,6 +18,7 @@ class NetworkManager(QObject):
     errorOccurred = Signal(str)
     checkoutSessionCreated = Signal(str)
     ticketListChanged = Signal()
+    ticketValidated = Signal("QVariantMap")
 
     def __init__(self, base_url: str = "http://127.0.0.1:8000", auth_store=None):
         super().__init__()
@@ -148,4 +149,18 @@ class NetworkManager(QObject):
         except Exception as e:
             logger.exception("Fetch tickets failed")
             self.errorOccurred.emit(f"Fetch tickets failed: {e}")
+
+    @Slot(str)
+    def validateTicket(self, payload: str):
+        logger.debug(f"Validating ticket: {payload}")
+        url = f"{self.base_url}/check-ticket"
+        try:
+            r = requests.post(url, json={"ticket_id": payload}, timeout=8)
+            r.raise_for_status()
+            result = r.json()
+            logger.debug(f"Ticket validation result: {result}")
+            self.ticketValidated.emit(result)
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Ticket validation failed: {e}")
+            self.ticketValidated.emit({"status": "error", "detail": str(e)})
 
