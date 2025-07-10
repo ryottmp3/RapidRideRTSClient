@@ -8,7 +8,7 @@ ApplicationWindow {
     visible: true
     width: 400
     height: 720
-    title: qsTr("RTS RapidRide")
+    title: qsTr("WeRideTransit")
     property string currentPage: "login.qml"
 
     // Shared gradient background
@@ -23,7 +23,7 @@ ApplicationWindow {
     // Persistent navigation drawer
     Drawer {
         id: navDrawer
-        width: parent.width * 0.75
+        width: parent.width * 0.6
         height: parent.height
         edge: Qt.LeftEdge
         modal: true
@@ -37,8 +37,18 @@ ApplicationWindow {
             RowLayout {
                 Layout.alignment: Qt.AlignRight
                 spacing: 12
+                Text {
+                    text: AuthStore.username() || "Guest"
+                    font.pixelSize: 24
+                    color: Theme.text
+                    Layout.alignment: Qt.AlignVCenter
+                }
                 Rectangle {
-                    width: 48; height: 48; radius: 24; color: "#444"
+                    width: 48
+                    height: 48
+                    radius: 24
+                    color: "#444"
+                    Layout.alignment: Qt.AlignRight
                     Image {
                         anchors.fill: parent
                         source: "assets/default_user_photo.png"
@@ -99,7 +109,7 @@ ApplicationWindow {
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: 50
+        height: 80
         background: Rectangle { color: Theme.accent }
         contentItem: RowLayout {
             anchors.fill: parent
@@ -114,7 +124,10 @@ ApplicationWindow {
                 Layout.preferredWidth: 40
                 Layout.preferredHeight: 40
                 Layout.alignment: Qt.AlignVCenter
-                onClicked: navDrawer.open()
+                onClicked: {
+                    navDrawer.open()
+                    AuthStore._fetch_user_info()
+                }
             }
 
             // Spacer pushes content left
@@ -123,11 +136,15 @@ ApplicationWindow {
             // Logo image
             Image {
                 id: logo
-                source: "assets/rapidride.png"
+                source: "assets/WeRideTransit_horizontal.png"
                 fillMode: Image.PreserveAspectFit
                 Layout.preferredWidth: 200
-                Layout.preferredHeight: 40
+                Layout.preferredHeight: 50
                 Layout.alignment: Qt.AlignVCenter
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: controller.loadPage("home.qml")
+                }
             }
 
             // Spacer pushes content right

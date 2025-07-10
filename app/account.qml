@@ -14,7 +14,7 @@ Item {
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: 20
-            spacing: 20
+            spacing: 10
 
             Label {
                 text: "Account Settings"
@@ -23,58 +23,46 @@ Item {
                 color: Theme.text
             }
 
-            // Display name (placeholder only)
-            TextField {
-                id: displayNameField
-                placeholderText: "Display Name"
-                text: ""
+            ColumnLayout {
+                spacing: 5
+                
+                Label {
+                    text: "Current Settings"
+                    font.pixelSize: 18
+                    font.bold: true
+                    color: Theme.highlight
+                }
+
+                Text {
+                    text: "<b>Display Name:</b> " + AuthStore.displayName()
+                    font.pixelSize: 14
+                    color: Theme.text
+                }
+
+                Text {
+                    text: "<b>Username:</b> " + AuthStore.username()
+                    font.pixelSize: 14
+                    color: Theme.text
+                }
+
+                Text {
+                    text: "<b>Email Address:</b> " + AuthStore.email()
+                    font.pixelSize: 14
+                    color: Theme.text
+                }
+            }
+
+            Button {
+                text: "Change Account Settings"
                 Layout.fillWidth: true
-                font.pixelSize: 16
-                color: Theme.text
                 background: Rectangle {
                     color: Theme.buttonBackground
-                    radius: 6
-                    border.color: Theme.border
-                }
-            }
-
-            // Email (disabled for now)
-            TextField {
-                id: emailField
-                placeholderText: "Email (read-only)"
-                text: "user@example.com"
-                enabled: false
-                Layout.fillWidth: true
-                font.pixelSize: 16
-                color: Theme.text
-                background: Rectangle {
-                    color: Theme.buttonBackground
-                    radius: 6
-                    border.color: Theme.border
-                }
-            }
-
-            // Change Password button
-            Button {
-                text: "Change Password"
-                Layout.fillWidth: true
-                onClicked: {
-                    infoPopup.text = "Password reset functionality is not implemented yet."
-                    infoPopup.open()
-                }
-            }
-
-            // Delete Account button
-            Button {
-                text: "Delete Account"
-                Layout.fillWidth: true
-                background: Rectangle {
-                    color: "#aa0000"
-                    radius: 6
+                    radius: 8
+                    border.color: Theme.accent
+                    border.width: 1
                 }
                 onClicked: {
-                    infoPopup.text = "Account deletion not yet supported."
-                    infoPopup.open()
+                    controller.loadPage("account_modification.qml")
                 }
             }
 

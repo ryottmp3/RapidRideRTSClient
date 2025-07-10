@@ -5,7 +5,6 @@ import logging
 import requests
 import os
 from pathlib import Path
-from datetime import datetime as dt
 from PySide6.QtCore import QObject, Signal, Slot, QStandardPaths
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
@@ -99,7 +98,7 @@ class WalletStore(QObject):
                 if isinstance(ticket, str):
                     ticket = json.loads(ticket)
                 if isinstance(ticket, dict):
-                    self.logger.debug(f"walletStore.load: ticket: {ticket}")
+                    # self.logger.debug(f"walletStore.load: ticket: {ticket}")
                     valid.append(ticket)
             self._tickets = valid
         else:
@@ -225,9 +224,9 @@ class WalletStore(QObject):
                 len(server_ticket_dicts)
             } server tickets."
         )
-        self.logger.debug(
-            f"Server Ticket Dicts: \n{server_ticket_dicts}"
-        )
+        #self.logger.debug(
+        #    f"Server Ticket Dicts: \n{server_ticket_dicts}"
+        #)
 
         local_by_id = {
             t["ticket_id"]: t
@@ -244,13 +243,13 @@ class WalletStore(QObject):
         new_tickets = []
         used_or_expired_tickets = []
         for tid, server_ticket in server_by_id.items():
-            self.logger.debug(f"server_by_id.ticket_id: {tid}")
-            self.logger.debug(f"server_by_id.server_ticket: {server_ticket}")
-            self.logger.debug(
-                f"server_by_id.server_ticket['status']: {
-                    server_ticket["status"]
-                }"
-            )
+            #self.logger.debug(f"server_by_id.ticket_id: {tid}")
+            #self.logger.debug(f"server_by_id.server_ticket: {server_ticket}")
+            #self.logger.debug(
+            #    f"server_by_id.server_ticket['status']: {
+            #        server_ticket["status"]
+            #    }"
+            #)
             sig = server_ticket["signature"]
             ticket_dict = json.loads(server_ticket["ticket"])
             if tid not in local_by_id:

@@ -177,11 +177,16 @@ class NetworkManager(QObject):
         logger.debug(f"Marking as used ticket: {ticket_id}")
         url = f"{self.base_url}/use-ticket"
         try:
-            r = requests.post(url, json={"ticket_id": ticket_id}, timeout=8)
+            data = {"ticket_id": ticket_id}
+            logger.debug(f"Data: {data}")
+            r = requests.post(url, json=data, timeout=8)
             r.raise_for_status()
             result = r.json()
             logger.debug(f"Ticket usage result: {result}")
             self.ticketUsed.emit(result)
-        except Exception as e:
+        except requests.exceptions.HTTPError as e:
             logger.error(f"Ticket usage request failed: {e}")
-            self.ticketUsed.emit({"status": "error", "detail": str(e)})
+            try:
+                logger.error(f"Server returned: {r.json()}")
+            except Exception:
+                logger.error(f"Raw response: {r.text}")

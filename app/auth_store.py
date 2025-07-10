@@ -135,13 +135,18 @@ class AuthStore(QObject):
                 self.logger.warning("Logout request failed: %s", e)
         self._clear_tokens()
 
+    @Slot()
     def _fetch_user_info(self):
         try:
             headers = {"Authorization": f"Bearer {self.get_access_token()}"}
             r = requests.get(f"{self.api_url}/users/me", headers=headers)
             if r.status_code == 200:
                 user_info = r.json()
+                self.logger.debug(f"User Info: {user_info}")
                 self._tokens["is_admin"] = user_info.get("is_admin", False)
+                self._tokens["username"] = user_info.get("username", "user")
+                self._tokens["display_name"] = user_info.get("display_name", "")
+                self._tokens["email"] = user_info.get("email", "")
                 self._save_tokens()
                 return True
         except Exception as e:
@@ -151,3 +156,72 @@ class AuthStore(QObject):
     @Slot(result=bool)
     def isAdmin(self):
         return self._tokens.get("is_admin", False)
+
+    @Slot(result=str)
+    def username(self):
+        return self._tokens.get("username", "User")
+
+    @Slot(result=str)
+    def displayName(self):
+        return self._tokens.get("display_name", "None")
+
+    @Slot(result=str)
+    def email(self):
+        return self._tokens.get("email", "None")
+
+    @Slot(str, str, str, str)
+    def update_account_settings(self, display_name, username, email, new_password):
+        """Updates user's account info"""
+        access = self.get_access_token()
+        if not access:
+            self.logger.warning("No access token available for updating account")
+            self.errorOccurred.emit("You are not logged in.")
+            return
+
+        headers = {
+            "Authorization": f"Bearer {access}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "display_name": display_name,
+            "username": username,
+            "email": email
+        }
+        if new_password:
+            payload["password"] = new_password
+
+        try:
+            r = requests.put(f"{self.api_url}/users/me", json=payload, headers=headers)
+            if r.status_code == 200:
+                self.logger.info("Account updated successfully")
+                self._fetch_user_info()
+                self.loginFinished.emit(True, "Account updated.")
+            else:
+                self.logger.warning("Failed to update account: %s", r.text)
+                self.errorOccurred.emit("Failed to update account.")
+        except Exception as e:
+            self.logger.error("Exception during account update: %s", e)
+            self.errorOccurred.emit(str(e))
+
+    @Slot()
+    def delete_my_account(self):
+        """Deletes user's account"""
+        access = self.get_access_token()
+        if not access:
+            self.logger.warning("No access token for account deletion")
+            self.errorOccurred.emit("You are not logged in.")
+            return
+
+        try:
+            headers = {"Authorization": f"Bearer {access}"}
+            r = requests.delete(f"{self.api_url}/users/me", headers=headers)
+            if r.status_code == 204:
+                self.logger.info("Account deleted successfully")
+                self._clear_tokens()
+                self.loginStatusChanged.emit(False)
+            else:
+                self.logger.warning("Failed to delete account: %s", r.text)
+                self.errorOccurred.emit("Account deletion failed.")
+        except Exception as e:
+            self.logger.error("Exception during account deletion: %s", e)
+            self.errorOccurred.emit(str(e))

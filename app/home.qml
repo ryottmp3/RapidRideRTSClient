@@ -25,7 +25,7 @@ Rectangle {
 
             delegate: Button {
                 Layout.fillWidth: true
-                height: 60
+                Layout.preferredHeight: AuthStore.isAdmin() ? 80 : 108
                 text: modelData.label
                 font.pixelSize: 18
 
@@ -51,7 +51,7 @@ Rectangle {
         Button {
             visible: AuthStore.isAdmin()
             Layout.fillWidth: true
-            height: 60
+            Layout.preferredHeight: 80
             text: "Admin Tools"
             font.pixelSize: 18
 
